@@ -6,6 +6,7 @@ from app.api.v1 import (
     alexa,
     auth,
     competencies,
+    demo,
     documents,
     health,
     projects,
@@ -46,3 +47,4 @@ router.include_router(
 )
 router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 router.include_router(alexa.router, prefix="/alexa", tags=["alexa"])
+router.include_router(demo.router, prefix="/demo", tags=["demo"])

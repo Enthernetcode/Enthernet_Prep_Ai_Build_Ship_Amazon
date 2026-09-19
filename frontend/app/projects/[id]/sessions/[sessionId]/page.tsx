@@ -12,6 +12,38 @@ import {
   Turn,
 } from "../../../../lib/api";
 
+// Vendor-prefixed types for the Web Speech API — kept minimal so we don't
+// pull in a heavyweight typings package.
+interface SpeechRecognitionEventLike {
+  results: {
+    length: number;
+    [index: number]: {
+      isFinal: boolean;
+      [index: number]: { transcript: string };
+    };
+  };
+  resultIndex: number;
+}
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  }
+}
+
+const TTS_KEY = "eprep.tts";
+
 function pct(x: number): string {
   return `${Math.round(x * 100)}%`;
 }
@@ -25,9 +57,20 @@ function SessionInner() {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [answer, setAnswer] = useState("");
+  const [interim, setInterim] = useState("");
+  const [listening, setListening] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const startedAtRef = useRef<number | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const spokenIdRef = useRef<string | null>(null);
+
+  const sttSupported =
+    typeof window !== "undefined" &&
+    !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
+  const ttsSupported =
+    typeof window !== "undefined" && "speechSynthesis" in window;
 
   const activeTurn: Turn | undefined = useMemo(
     () => session?.turns.find((t) => t.user_answer === null),
@@ -70,6 +113,82 @@ function SessionInner() {
   useEffect(() => {
     if (activeTurn) startedAtRef.current = Date.now();
   }, [activeTurn?.id]);
+
+  // Restore TTS preference.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setTtsEnabled(window.localStorage.getItem(TTS_KEY) === "1");
+  }, []);
+
+  // Speak each new question exactly once when TTS is on.
+  useEffect(() => {
+    if (!ttsEnabled || !ttsSupported || !activeTurn) return;
+    if (spokenIdRef.current === activeTurn.id) return;
+    spokenIdRef.current = activeTurn.id;
+    const utterance = new SpeechSynthesisUtterance(activeTurn.question);
+    utterance.rate = 1.0;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, [ttsEnabled, ttsSupported, activeTurn?.id, activeTurn?.question]);
+
+  // Stop any in-flight speech when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (ttsSupported) window.speechSynthesis.cancel();
+      recognitionRef.current?.stop();
+    };
+  }, [ttsSupported]);
+
+  const toggleTts = () => {
+    const next = !ttsEnabled;
+    setTtsEnabled(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(TTS_KEY, next ? "1" : "0");
+      if (!next) window.speechSynthesis.cancel();
+    }
+  };
+
+  const startListening = () => {
+    if (!sttSupported) return;
+    const Ctor =
+      window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!Ctor) return;
+    const recognition = new Ctor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = (event) => {
+      let finalDelta = "";
+      let interimDelta = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const transcript = result[0].transcript;
+        if (result.isFinal) finalDelta += transcript;
+        else interimDelta += transcript;
+      }
+      if (finalDelta) {
+        setAnswer((prev) => (prev ? prev + " " + finalDelta : finalDelta).trim());
+      }
+      setInterim(interimDelta);
+    };
+    recognition.onerror = (event) => {
+      setError(`Voice input: ${event.error ?? "unknown error"}`);
+      setListening(false);
+    };
+    recognition.onend = () => {
+      setListening(false);
+      setInterim("");
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+    setError(null);
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
 
   const requestQuestion = async () => {
     setBusy(true);
@@ -159,20 +278,66 @@ function SessionInner() {
 
       {activeTurn ? (
         <section className="rounded-xl border border-eprep-purple/40 bg-eprep-surface p-6">
-          <p className="text-xs uppercase tracking-widest text-eprep-muted">
-            Question {activeTurn.ordinal} · difficulty {activeTurn.difficulty} ·{" "}
-            {activeTurn.topic}
-          </p>
-          <h2 className="mt-3 text-xl leading-relaxed">{activeTurn.question}</h2>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-eprep-muted">
+                Question {activeTurn.ordinal} · difficulty {activeTurn.difficulty} ·{" "}
+                {activeTurn.topic}
+              </p>
+              <h2 className="mt-3 text-xl leading-relaxed">{activeTurn.question}</h2>
+            </div>
+            {ttsSupported && (
+              <button
+                type="button"
+                onClick={toggleTts}
+                className={`shrink-0 rounded-md border px-3 py-1 text-xs uppercase tracking-widest transition ${
+                  ttsEnabled
+                    ? "border-eprep-electric text-eprep-electric"
+                    : "border-eprep-purple/40 text-eprep-muted hover:text-eprep-text"
+                }`}
+                title="Read the question aloud"
+              >
+                {ttsEnabled ? "🔊 On" : "🔈 Off"}
+              </button>
+            )}
+          </div>
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <textarea
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Type your answer…"
-              rows={7}
-              required
-              className="w-full rounded-md border border-eprep-purple/40 bg-eprep-bg px-3 py-2 focus:border-eprep-electric focus:outline-none"
-            />
+            <div className="relative">
+              <textarea
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder={
+                  listening
+                    ? "Listening… speak your answer"
+                    : "Type your answer, or tap the mic to speak…"
+                }
+                rows={7}
+                required
+                className={`w-full rounded-md border bg-eprep-bg px-3 py-2 pr-14 focus:outline-none ${
+                  listening
+                    ? "border-eprep-magenta shadow-[0_0_0_2px_rgba(255,43,214,0.25)]"
+                    : "border-eprep-purple/40 focus:border-eprep-electric"
+                }`}
+              />
+              {interim && (
+                <p className="mt-1 text-xs italic text-eprep-muted">…{interim}</p>
+              )}
+              {sttSupported && (
+                <button
+                  type="button"
+                  onClick={listening ? stopListening : startListening}
+                  className={`absolute right-2 top-2 rounded-full px-3 py-2 text-sm transition ${
+                    listening
+                      ? "bg-eprep-magenta text-white animate-pulse"
+                      : "bg-eprep-purple/20 text-eprep-electric hover:bg-eprep-purple/40"
+                  }`}
+                  title={listening ? "Stop listening" : "Start voice input"}
+                  aria-label={listening ? "Stop listening" : "Start voice input"}
+                >
+                  {listening ? "■" : "🎙"}
+                </button>
+              )}
+            </div>
             <div className="flex justify-between">
               <button
                 type="button"

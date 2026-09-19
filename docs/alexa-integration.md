@@ -32,11 +32,28 @@ Alexa passes the linked user's OAuth access token in `session.user.accessToken`.
 
 For the demo we assume the same JWT the web app issues; a production wiring should issue Amazon-scoped tokens via Login-with-Amazon.
 
-## Not implemented (must land before Amazon submission)
+## Request signature verification
 
-1. **Request signature verification.** The current handler trusts the caller. Alexa cert requires validating the `Signature`, `SignatureCertChainUrl`, and the request-body timestamp window (150 s).
-2. **Skill package** (interaction model JSON + endpoint URL). Placeholder env vars: `ALEXA_SKILL_ID`, `ALEXA_CLIENT_ID`, `ALEXA_CLIENT_SECRET`.
-3. **Latency guard.** Alexa gives ~8 s per turn. Evaluator + planner are synchronous — fine with the mock provider, but the OpenAI path should be moved to a progressive-response pattern.
+Implemented in `app/alexa/verify.py` and gated by `ALEXA_VERIFY_SIGNATURE` (default `false` for dev/demo). When on:
+
+- `SignatureCertChainUrl` header must be `https://s3.amazonaws.com/echo.api/...` (scheme, host, port, and normalised path all enforced).
+- Cert chain is fetched + cached in-memory bounded by earliest `notAfter`.
+- Leaf cert must be currently valid and include `echo-api.amazon.com` in SAN.
+- Body signature verified as RSA-SHA1 over the raw request bytes.
+- `request.timestamp` must be within `ALEXA_TIMESTAMP_TOLERANCE_SECONDS` (default 150).
+
+Turn on for production:
+
+```
+ALEXA_VERIFY_SIGNATURE=true
+```
+
+Covered by `backend/tests/test_alexa_signature.py` (11 tests with self-signed cert fixtures).
+
+## Still to land before Amazon submission
+
+1. **Skill package** (interaction model JSON + endpoint URL). Placeholder env vars: `ALEXA_SKILL_ID`, `ALEXA_CLIENT_ID`, `ALEXA_CLIENT_SECRET`.
+2. **Latency guard.** Alexa gives ~8 s per turn. Evaluator + planner are synchronous — fine with the mock provider, but the OpenAI path should be moved to a progressive-response pattern.
 
 ## Example envelope (for `curl` smoke test)
 

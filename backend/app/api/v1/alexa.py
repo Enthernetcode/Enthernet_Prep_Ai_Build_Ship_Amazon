@@ -12,10 +12,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import json
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.alexa.verify import AlexaSignatureError, get_verifier
 from app.api.v1.sessions import (
     _competency_candidates,
     _grounding_text,
@@ -29,6 +32,7 @@ from app.agents.evaluator import EvaluatorAgent
 from app.agents.examiner import ExaminerAgent
 from app.agents.weakness import WeaknessAgent
 from app.auth import get_current_user
+from app.config import settings
 from app.db import get_session
 from app.models.competency import CompetencyItem
 from app.models.project import PreparationProject
@@ -64,6 +68,20 @@ async def _current_alexa_user(
             detail="Alexa account linking is required.",
         )
     token = authorization.split(" ", 1)[1]
+    return await get_current_user(token=token, session=session)
+
+
+async def _resolve_user_from_signed_body(
+    body: dict, session: AsyncSession
+) -> User:
+    """When signature verification is on, identify the user by the linked
+    Amazon OAuth token embedded in the Alexa envelope."""
+    token = (body.get("session") or {}).get("user", {}).get("accessToken")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Alexa account linking is required.",
+        )
     return await get_current_user(token=token, session=session)
 
 
@@ -402,13 +420,38 @@ async def _handle_answer(
 @router.post("", response_model=AlexaResponse)
 @router.post("/", response_model=AlexaResponse)
 async def alexa_webhook(
-    payload: AlexaRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
     authorization: Annotated[str | None, Header()] = None,
-    session: Annotated[AsyncSession, Depends(get_session)] = None,  # type: ignore[assignment]
+    signature: Annotated[str | None, Header(alias="Signature")] = None,
+    signature_cert_chain_url: Annotated[
+        str | None, Header(alias="SignatureCertChainUrl")
+    ] = None,
 ) -> AlexaResponse:
-    user = await _current_alexa_user(authorization=authorization, session=session)
-    request = payload.request or {}
-    kind = request.get("type", "")
+    raw_body = await request.body()
+    try:
+        body_dict = json.loads(raw_body or b"{}")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}") from None
+
+    if settings.alexa_verify_signature:
+        verifier = get_verifier()
+        try:
+            await verifier.verify(
+                body=raw_body,
+                signature_header=signature,
+                cert_url_header=signature_cert_chain_url,
+                body_timestamp=(body_dict.get("request") or {}).get("timestamp"),
+            )
+        except AlexaSignatureError as exc:
+            raise HTTPException(status_code=400, detail=f"Alexa signature: {exc}") from None
+        user = await _resolve_user_from_signed_body(body_dict, session)
+    else:
+        user = await _current_alexa_user(authorization=authorization, session=session)
+
+    payload = AlexaRequest.model_validate(body_dict)
+    request_body = payload.request or {}
+    kind = request_body.get("type", "")
     session_attrs = payload.session.get("attributes", {}) if payload.session else {}
 
     if kind == "LaunchRequest":
@@ -416,7 +459,7 @@ async def alexa_webhook(
     if kind == "SessionEndedRequest":
         return AlexaResponse(response={"shouldEndSession": True})
     if kind == "IntentRequest":
-        intent = request.get("intent", {}) or {}
+        intent = request_body.get("intent", {}) or {}
         name = intent.get("name", "")
         slots = intent.get("slots", {}) or {}
         if name == "StartInterviewIntent":
@@ -425,7 +468,7 @@ async def alexa_webhook(
             return await _handle_start(session, user, mode="final_boss")
         if name == "AnswerIntent":
             slot = slots.get("answer") or {}
-            text = slot.get("value") or request.get("intent", {}).get("value") or ""
+            text = slot.get("value") or intent.get("value") or ""
             if not text:
                 return AlexaResponse(
                     response=_speak(

@@ -1,0 +1,42 @@
+SENIOR CLOUD ENGINEER — Enthernet
+Location: Remote (UTC ± 3)
+Reports to: VP Platform
+
+ABOUT THE ROLE
+We are looking for a Senior Cloud Engineer to own the reliability, scaling,
+and developer experience of the Enthernet platform. You will spend most of
+your time inside a modern AWS + Kubernetes stack, deciding when to codify
+things with Terraform, when to lean on managed services, and when to write
+a small tool that removes a whole class of paper cuts for our engineers.
+
+WHAT YOU WILL DO
+- Operate our production EKS clusters (multi-account, multi-region).
+- Own CI/CD on GitHub Actions and shape the deploy story from PR → prod.
+- Design PostgreSQL and pgvector data patterns for AI workloads.
+- Drive observability with OpenTelemetry, Prometheus, and Grafana.
+- Own the incident review process and improve runbooks after every page.
+- Partner with product engineers on scale, security, and cost.
+
+WHAT WE LOOK FOR
+- Deep production experience with AWS and Kubernetes (5+ years).
+- Comfortable writing Terraform for real infrastructure, not toy examples.
+- Fluent in at least one of Python or Go; can read TypeScript.
+- Track record of reducing latency, cost, or deploy time with specifics.
+- Excellent judgement about trade-offs between simplicity and flexibility.
+- Great communicator — writes design docs, explains decisions in plain words.
+
+NICE TO HAVE
+- Experience running Kafka, Redis, or event-driven microservices.
+- Familiarity with service meshes (Istio, Envoy).
+- Prior on-call experience for a customer-facing service.
+- Interest in AI/ML infrastructure, especially retrieval and RAG systems.
+
+INTERVIEW LOOP
+1. Screen — 45 min chat about your last two years.
+2. System design — 60 min deep dive: design a service you have already run.
+3. Reliability & operations — 60 min incident review and on-call scenarios.
+4. Bar-raiser — 45 min culture + leadership signals.
+
+COMPENSATION
+Competitive base + equity + generous learning budget. We hire globally and
+adjust to local benchmarks.

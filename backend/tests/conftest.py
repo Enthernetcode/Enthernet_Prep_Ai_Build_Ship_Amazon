@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -28,8 +29,17 @@ app_db.AsyncSessionLocal = _TestSessionLocal
 from app.main import app  # noqa: E402
 
 
+@pytest_asyncio.fixture(scope="session")
+async def _lifespan() -> AsyncIterator[None]:
+    """Run FastAPI's lifespan for the whole test session. The MCP session
+    manager's background task group needs run() to be entered before any
+    request lands, and .run() can only be called once per instance."""
+    async with LifespanManager(app):
+        yield
+
+
 @pytest_asyncio.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def client(_lifespan) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 

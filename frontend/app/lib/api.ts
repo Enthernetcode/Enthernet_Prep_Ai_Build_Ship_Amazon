@@ -149,6 +149,20 @@ export interface Turn {
   answered_at: string | null;
 }
 
+export interface DemoSeedResponse {
+  access_token: string;
+  token_type: string;
+  user_id: string;
+  project_id: string;
+  dashboard_path: string;
+  competencies: number;
+  baseline_readiness: number;
+}
+
+export async function seedDemo(): Promise<DemoSeedResponse> {
+  return api<DemoSeedResponse>("/demo/seed", { body: {}, auth: false });
+}
+
 export interface SessionDetail {
   id: string;
   project_id: string;

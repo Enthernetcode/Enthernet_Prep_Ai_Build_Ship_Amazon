@@ -34,6 +34,10 @@ def get_llm_provider() -> LLMProvider:
         from app.providers.openai_provider import OpenAILLMProvider
 
         return OpenAILLMProvider()
+    if kind == "bedrock":
+        from app.providers.bedrock import BedrockLLMProvider
+
+        return BedrockLLMProvider()
     raise ValueError(f"Unknown llm_provider: {settings.llm_provider!r}")
 
 
@@ -46,4 +50,8 @@ def get_embedding_provider() -> EmbeddingProvider:
         from app.providers.openai_provider import OpenAIEmbeddingProvider
 
         return OpenAIEmbeddingProvider(dimensions=settings.embedding_dimensions)
+    if kind == "bedrock":
+        from app.providers.bedrock import BedrockEmbeddingProvider
+
+        return BedrockEmbeddingProvider(dimensions=settings.embedding_dimensions)
     raise ValueError(f"Unknown embedding_provider: {settings.embedding_provider!r}")

@@ -1,0 +1,43 @@
+RUTH OKONKWO
+Senior Cloud Engineer · Lagos → Remote · ruth.okonkwo@example.com
+
+SUMMARY
+Cloud infrastructure engineer with 6 years of experience owning production
+Kubernetes platforms on AWS. Passionate about developer experience,
+observability, and turning migrations into non-events.
+
+EXPERIENCE
+
+Staff Cloud Engineer — Enthernet, 2024–present
+- Owned migration of the payments platform from ECS to EKS. Reduced cold
+  deploy time from 22 minutes to 6 minutes (a 72% reduction) by adopting
+  Argo CD and pre-warmed node pools.
+- Introduced Terraform modules for VPC, RDS Postgres, and pgvector, cutting
+  new-account bootstrap from three days to under two hours.
+- Ran the on-call rotation for a Redis + Kafka event pipeline handling
+  4,800 requests per second at p99 latency under 45 ms.
+- Ship CI/CD on GitHub Actions with mandatory security scans (Trivy,
+  Snyk) and a canary rollout policy.
+
+Senior SRE — Payflex, 2020–2024
+- Built a multi-region PostgreSQL failover using pgBouncer and streaming
+  replication; documented failover runbook exercised quarterly.
+- Introduced Prometheus + Grafana dashboards for the mobile backend and
+  drove a 30% reduction in customer-reported latency incidents.
+- Migrated a legacy monolith to microservices behind an Envoy service mesh.
+
+Cloud Engineer — Kobo360, 2018–2020
+- Bootstrapped the platform team's AWS estate using Terraform and Ansible.
+- Owned the DynamoDB → PostgreSQL migration for the fleet-tracking service.
+
+SKILLS
+AWS (EKS, EC2, Lambda, RDS, S3, IAM, CloudFront, SQS)
+Kubernetes, Helm, Argo CD, Istio
+Terraform, Ansible, GitHub Actions
+Python (FastAPI, SQLAlchemy), Go, TypeScript
+PostgreSQL, Redis, Kafka, pgvector
+Prometheus, Grafana, OpenTelemetry
+Linux, Bash, Envoy, NGINX
+
+EDUCATION
+BSc Computer Science — University of Lagos, 2018

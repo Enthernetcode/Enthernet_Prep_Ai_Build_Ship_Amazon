@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     alexa_skill_id: str = ""
     alexa_client_id: str = ""
     alexa_client_secret: str = ""
+    # When true, POST /alexa enforces Amazon-signed request verification and
+    # ignores the Authorization bearer path used by the dev/demo wiring.
+    alexa_verify_signature: bool = False
+    # Age window (seconds) for the timestamp inside a signed Alexa request.
+    alexa_timestamp_tolerance_seconds: int = 150
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
