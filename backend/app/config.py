@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     # Age window (seconds) for the timestamp inside a signed Alexa request.
     alexa_timestamp_tolerance_seconds: int = 150
 
+    # Comma-separated emails that get admin access (POST /admin/providers, etc.).
+    admin_emails: list[str] = Field(default_factory=list)
+    # Public origin (used to build reset password links etc.).
+    public_web_base_url: str = "http://localhost:3000"
+
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     @property

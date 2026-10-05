@@ -149,6 +149,18 @@ export interface Turn {
   answered_at: string | null;
 }
 
+export interface ProviderConfig {
+  id: string;
+  scope: string;
+  llm_provider: "mock" | "openai" | "bedrock";
+  llm_model: string;
+  embedding_provider: "mock" | "openai" | "bedrock";
+  embedding_model: string;
+  updated_at: string;
+  updated_by: string | null;
+  editable: boolean;
+}
+
 export interface DemoSeedResponse {
   access_token: string;
   token_type: string;

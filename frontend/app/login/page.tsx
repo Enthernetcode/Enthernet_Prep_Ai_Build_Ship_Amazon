@@ -69,6 +69,15 @@ export default function LoginPage() {
           Register
         </Link>
       </p>
+      <p className="mt-2 text-sm text-eprep-muted">
+        Forgot your password?{" "}
+        <Link
+          href="/forgot-password"
+          className="text-eprep-electric hover:underline"
+        >
+          Reset it
+        </Link>
+      </p>
     </main>
   );
 }

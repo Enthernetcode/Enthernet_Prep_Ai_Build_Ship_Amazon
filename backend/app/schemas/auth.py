@@ -27,3 +27,4 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
     created_at: datetime
+    is_admin: bool = False

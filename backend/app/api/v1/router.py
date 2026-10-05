@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin,
     alexa,
+    announcements,
     auth,
     competencies,
     demo,
@@ -48,3 +50,7 @@ router.include_router(
 router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 router.include_router(alexa.router, prefix="/alexa", tags=["alexa"])
 router.include_router(demo.router, prefix="/demo", tags=["demo"])
+router.include_router(admin.router, prefix="/admin", tags=["admin"])
+router.include_router(
+    announcements.router, prefix="/announcements", tags=["announcements"]
+)

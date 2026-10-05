@@ -28,6 +28,8 @@ dependencies = [
     "openai>=1.30",
     "mcp>=2.2",
     "cryptography>=42",
+    "aiosmtplib>=3.0",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +37,10 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
+    # Needed by tests/conftest.py so FastAPI's lifespan runs under
+    # httpx.ASGITransport (which doesn't fire lifespan events on its own).
+    # The MCP session managers' background task groups depend on it.
+    "asgi-lifespan>=2.1",
 ]
 
 [tool.setuptools.packages.find]

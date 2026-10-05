@@ -7,11 +7,13 @@ import { api, getToken, setToken } from "./api";
 interface AuthUser {
   id: string;
   email: string;
+  is_admin?: boolean;
 }
 
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -76,7 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isAdmin: !!user?.is_admin,
+        login,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -95,6 +106,25 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
   if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-eprep-muted">
+        Loading…
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
+export function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { user, loading, isAdmin } = useAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (!loading) {
+      if (!user) router.replace("/login");
+      else if (!isAdmin) router.replace("/projects");
+    }
+  }, [loading, user, isAdmin, router]);
+  if (loading || !user || !isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center text-eprep-muted">
         Loading…
