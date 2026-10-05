@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "./lib/auth";
+import { AnnouncementBanner } from "./components/AnnouncementBanner";
 
 const SITE_URL = "https://eprep.enthernetservice.com";
 const SITE_NAME = "Enthernet Prep AI";
@@ -51,12 +52,15 @@ export const metadata: Metadata = {
     title: `${SITE_NAME} · Live in the Moment`,
     description: DESCRIPTION,
     locale: "en_US",
+    // Explicit absolute URL: `next dev` ignores metadataBase for file-based
+    // metadata images and inserts localhost:3000, breaking social crawlers.
     images: [
       {
-        url: "/opengraph-image",
+        url: `${SITE_URL}/opengraph-image.png`,
         width: 1200,
         height: 630,
         alt: `${SITE_NAME} — agentic readiness engine`,
+        type: "image/png",
       },
     ],
   },
@@ -65,7 +69,7 @@ export const metadata: Metadata = {
     title: `${SITE_NAME} · Live in the Moment`,
     description: DESCRIPTION,
     creator: "@enthernet",
-    images: ["/opengraph-image"],
+    images: [`${SITE_URL}/twitter-image.png`],
   },
   robots: {
     index: true,
@@ -78,10 +82,8 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-  icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-  },
+  // Favicon + apple-touch icons are auto-picked up from app/icon.png and
+  // app/apple-icon.png.
 };
 
 const JSON_LD = {
@@ -148,7 +150,10 @@ export default function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <AnnouncementBanner />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
