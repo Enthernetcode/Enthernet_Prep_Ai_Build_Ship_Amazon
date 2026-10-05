@@ -28,6 +28,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 
 # Editors / OS
 .vscode/
@@ -39,6 +41,8 @@ Thumbs.db
 
 # Docker volumes (in case of bind mounts)
 .docker-data/
+postgres_data/
+minio_data/
 
 # Local storage / uploads
 uploads/
@@ -46,5 +50,18 @@ storage/
 *.sqlite
 *.db
 
+# Harness / scratch — kept on disk, not shipped in git
 .claude/
 rsm
+mem.md
+prepare.md
+
+# Development-only spec — kept on disk, not shipped in git
+Agent.md
+
+# Root marketing originals — the versions actually served live under
+# frontend/public/ and frontend/app/ (icon.png / apple-icon.png /
+# background.png / enthernet-logo.png). The root copies are inputs we edit
+# locally; no consumer of this repo needs them.
+/favicon.png
+/background.png
