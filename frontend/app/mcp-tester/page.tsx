@@ -93,7 +93,11 @@ export default function MCPTesterPage() {
   const origin = useMemo(() => serverOrigin(), []);
   const [endpoint, setEndpoint] = useState<Endpoint>("judged");
   const [token, setToken] = useState("");
+  // Our MCP server mounts stateless_http=True, so the response to initialize
+  // typically does NOT carry an `mcp-session-id` header. We still track it in
+  // case the server starts sending one, but gate step 3/4 on `initialized`.
   const [sessionId, setSessionId] = useState("");
+  const [initialized, setInitialized] = useState(false);
   const [tools, setTools] = useState<ToolDef[]>([]);
   const [args, setArgs] = useState<Record<string, Record<string, string>>>({});
   const [toolResult, setToolResult] = useState<Record<string, unknown>>({});
@@ -210,6 +214,7 @@ export default function MCPTesterPage() {
         }),
       });
       appendLog({ dir: "→", method: "notifications/initialized", text: "{}" });
+      setInitialized(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -218,7 +223,7 @@ export default function MCPTesterPage() {
   };
 
   const listTools = async () => {
-    if (!sessionId) {
+    if (!initialized) {
       setError("Initialize the session first.");
       return;
     }
@@ -236,7 +241,7 @@ export default function MCPTesterPage() {
   };
 
   const callTool = async (tool: ToolDef) => {
-    if (!sessionId) {
+    if (!initialized) {
       setError("Initialize first.");
       return;
     }
@@ -270,6 +275,7 @@ export default function MCPTesterPage() {
   // Reset session when switching endpoint.
   useEffect(() => {
     setSessionId("");
+    setInitialized(false);
     setTools([]);
     setToolResult({});
   }, [endpoint]);
@@ -315,9 +321,9 @@ export default function MCPTesterPage() {
           ))}
         </div>
         <code className="text-xs text-eprep-muted">POST {url}</code>
-        {sessionId && (
+        {initialized && (
           <span className="rounded bg-eprep-electric/20 px-2 py-0.5 text-[10px] uppercase tracking-widest text-eprep-electric">
-            session: {sessionId.slice(0, 8)}…
+            {sessionId ? `session: ${sessionId.slice(0, 8)}…` : "initialized (stateless)"}
           </span>
         )}
         {endpoint === "lab" && (
@@ -353,15 +359,15 @@ export default function MCPTesterPage() {
           label="Initialize MCP session"
           onClick={initialize}
           disabled={busy !== null || !token}
-          done={!!sessionId}
+          done={initialized}
           busy={busy === "init"}
-          hint={sessionId ? "ready" : "sends initialize + initialized"}
+          hint={initialized ? "ready" : "sends initialize + initialized"}
         />
         <Step
           num={3}
           label="List tools"
           onClick={listTools}
-          disabled={busy !== null || !sessionId}
+          disabled={busy !== null || !initialized}
           done={tools.length > 0}
           busy={busy === "list"}
           hint={tools.length ? `${tools.length} tools` : "tools/list"}
