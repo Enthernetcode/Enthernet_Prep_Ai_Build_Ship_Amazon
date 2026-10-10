@@ -62,7 +62,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Apply pending migrations before serving so a judge's `docker compose up`
+    # on a fresh clone needs no manual DB setup step. `alembic upgrade head` is
+    # idempotent — re-running against an up-to-date DB is a no-op.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build:
