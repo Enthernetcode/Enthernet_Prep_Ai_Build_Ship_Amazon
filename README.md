@@ -46,7 +46,20 @@ docker compose exec backend pytest -q
 
 ## Testing the MCP server (the Alexa+ story)
 
-Per the Devpost rules, judges act as the MCP client — Claude Desktop, an Alexa+ simulator, or an ad-hoc MCP client page. Our MCP server exposes **7 tools** that implement the preparation flow.
+Per the Devpost rules, judges act as the MCP client. **Three paths — pick whichever is easiest for you.**
+
+### Path A — Built-in browser MCP tester (recommended, zero external software)
+
+Open `http://localhost:3000/mcp-tester` after `docker compose up`. It's a page that *is* an MCP client — it sends `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` requests directly from the browser to the server. Just press the four buttons in order:
+
+1. **Mint a demo token** — calls `POST /api/v1/demo/seed`, no login required.
+2. **Initialize MCP session** — does the handshake, captures `mcp-session-id`.
+3. **List tools** — pulls the 7 (or 8, on lab) `prep.*` tool manifests.
+4. **Invoke a tool** — click any tool card, fill its arguments, see the structured response + raw wire log.
+
+Toggle between the judged (`/api/v1/mcp/`) and lab (`/api/v1/mcp-lab/`) mounts in the top-left. On lab you can also set the `X-LLM-Provider` override header per call.
+
+### Path B — curl
 
 ### Zero-friction token (no login required)
 
@@ -98,7 +111,9 @@ Expected 7 tools, prefixed `prep.`:
 
 Lab endpoint adds an 8th tool, `prep.debug.resolve_provider`, and honours an `X-LLM-Provider: mock|openai|bedrock` header so the LLM provider can be swapped per-request.
 
-### Claude Desktop config
+### Path C — Any MCP client (Claude Desktop, custom scripts, etc.)
+
+Claude Desktop example `claude_desktop_config.json`:
 
 ```json
 {
@@ -113,6 +128,8 @@ Lab endpoint adds an 8th tool, `prep.debug.resolve_provider`, and honours an `X-
 ```
 
 Restart Claude Desktop — 7 `prep.*` tools appear. Ask: *"list my preparation projects, then start a mock interview on the first one."*
+
+Any client that implements the MCP Streamable HTTP spec (2025-11-25) works equivalently. Nothing in the server is Claude-specific.
 
 ---
 

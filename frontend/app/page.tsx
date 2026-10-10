@@ -88,6 +88,13 @@ export default function HomePage() {
           </span>
         </Link>
         <div className="flex items-center gap-2 text-sm">
+          <Link
+            href="/mcp-tester"
+            className="rounded-md border border-eprep-electric/60 px-3 py-1.5 font-medium text-eprep-electric hover:bg-eprep-electric/10"
+            title="Browser-only MCP client for the Alexa+ submission surface"
+          >
+            MCP tester
+          </Link>
           {isAdmin && (
             <Link
               href="/admin"

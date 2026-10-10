@@ -67,6 +67,11 @@ If our server has an OpenAI key, that call returns an LLM-rephrased question. Wi
 
 ## 3. How to link MCP
 
+**The fastest path — a browser tab, no external software:** open `http://localhost:3000/mcp-tester` (or `https://eprep.enthernetservice.com/mcp-tester` on the hosted instance). The page *is* an MCP client — it issues `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` directly from the browser to the server. Press the four numbered buttons in order; each `prep.*` tool shows up as a card with its own input form and response panel. This is the simulated-experience path called out in the Devpost Alexa+ FAQ.
+
+Below are the equivalent paths for judges who prefer curl or an existing MCP client.
+
+
 Both endpoints are **live, Streamable HTTP, MCP spec 2025-11-25**, requiring `Authorization: Bearer <JWT>`:
 
 | Role | URL |
