@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 import random
 from typing import Any
 
 from app.agents.base import Agent, AgentContext, AgentResult
+from app.providers.base import GenerationRequest, LLMProvider
+
+logger = logging.getLogger(__name__)
 
 
 # §24 difficulty ladder → verb templates.
@@ -90,8 +94,29 @@ class ExaminerAgent(Agent):
 
         lead = _ROLE_LEAD_IN.get(goal_type or "", "")
         template = _template_for(pick["kind"], difficulty)
-        question = (lead + template.format(label=pick["label"])).strip()
-        question = question[0].upper() + question[1:]
+        base_question = (lead + template.format(label=pick["label"])).strip()
+        base_question = base_question[0].upper() + base_question[1:]
+
+        # Optional LLM rephrase. The deterministic question above is the
+        # fallback — if the LLM errors or isn't configured, we return it as-is.
+        llm_provider: LLMProvider | None = tools.get("llm_provider")
+        llm_model: str = tools.get("llm_model") or ""
+        grounding_text: str = tools.get("grounding_text") or ""
+        question = base_question
+        llm_source = "template"
+        if llm_provider is not None and getattr(llm_provider, "name", "mock") != "mock":
+            llm_question = await _llm_rephrase_question(
+                llm_provider,
+                llm_model,
+                base_question=base_question,
+                label=pick["label"],
+                difficulty=difficulty,
+                goal_type=goal_type,
+                grounding_text=grounding_text,
+            )
+            if llm_question:
+                question = llm_question
+                llm_source = llm_provider.name
 
         grounding = {
             "competency_id": pick.get("id"),
@@ -111,5 +136,60 @@ class ExaminerAgent(Agent):
                 "difficulty": difficulty,
                 "competency_id": pick.get("id"),
                 "grounding": grounding,
+                "question_source": llm_source,
             },
         )
+
+
+_SYSTEM_INTERVIEWER = (
+    "You are a professional interviewer. You ask ONE question at a time in "
+    "natural, spoken English — no preamble, no filler, no multiple questions. "
+    "Keep the question under 32 words. Do not add context, do not quote the "
+    "topic back verbatim, do not change the difficulty."
+)
+
+
+async def _llm_rephrase_question(
+    provider: LLMProvider,
+    model: str,
+    *,
+    base_question: str,
+    label: str,
+    difficulty: int,
+    goal_type: str | None,
+    grounding_text: str,
+) -> str | None:
+    """Ask the LLM to rephrase the templated question. Returns None on any
+    error so the caller falls back to the template."""
+    role = (goal_type or "job_interview").replace("_", " ")
+    prompt = (
+        f"Context: this is a {role} drill at difficulty level {difficulty} "
+        "(1=recall, 6=adversarial follow-up).\n"
+        f"Topic the candidate must demonstrate understanding of: {label}\n"
+        + (
+            f"Source material the candidate wrote about this topic (ground "
+            f"the question in it, do not quote verbatim):\n{grounding_text[:800]}\n"
+            if grounding_text
+            else ""
+        )
+        + f'\nOur working draft of the question: "{base_question}"\n\n'
+        "Rewrite that question so it sounds like a real interviewer. Reply "
+        "with ONLY the rewritten question, no preamble."
+    )
+    try:
+        resp = await provider.generate(
+            GenerationRequest(
+                model=model or "gpt-4o-mini",
+                prompt=prompt,
+                system=_SYSTEM_INTERVIEWER,
+                max_tokens=120,
+                temperature=0.6,
+            )
+        )
+    except Exception as exc:
+        logger.warning("Examiner LLM rephrase failed: %s", exc)
+        return None
+    text = (resp.text or "").strip().strip('"').strip("'")
+    if not text:
+        return None
+    return text

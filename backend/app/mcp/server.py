@@ -23,6 +23,8 @@ from app.agents.base import AgentContext
 from app.agents.evaluator import EvaluatorAgent
 from app.agents.examiner import ExaminerAgent
 from app.agents.weakness import WeaknessAgent
+from app.config import settings
+from app.providers import get_llm_provider
 from app.api.v1.readiness import _persist_snapshot
 from app.api.v1.sessions import (
     _competency_candidates,
@@ -354,6 +356,22 @@ async def start_session(
     ),
 )
 async def next_question(ctx: Context, session_id: str) -> dict[str, Any]:
+    # Judged tool entrypoint — thin wrapper. The lab server calls
+    # `next_question_impl` directly with its per-request provider override.
+    return await next_question_impl(ctx, session_id)
+
+
+async def next_question_impl(
+    ctx: Context,
+    session_id: str,
+    *,
+    llm_provider_override: Any = None,
+    llm_model_override: str | None = None,
+) -> dict[str, Any]:
+    """Shared body for both the judged and the lab `prep.next_question` tools.
+    `llm_provider_override` is used by the lab server (per-request resolved
+    provider). None means "use the judged-server defaults derived from
+    settings"."""
     async with AsyncSessionLocal() as session:
         user = await _resolve_user(ctx, session)
         prep, project = await _load_owned_session(session, uuid.UUID(session_id), user)
@@ -392,6 +410,8 @@ async def next_question(ctx: Context, session_id: str) -> dict[str, Any]:
         ).all()
         asked_labels = [r[0] for r in asked_rows if r[0]]
 
+        provider = llm_provider_override if llm_provider_override is not None else _judged_llm()
+        model = llm_model_override or settings.llm_model
         agent_result = await ExaminerAgent().execute(
             AgentContext(
                 user_id=str(user.id),
@@ -405,6 +425,8 @@ async def next_question(ctx: Context, session_id: str) -> dict[str, Any]:
                 "asked_labels": asked_labels,
                 "difficulty": prep.difficulty,
                 "seed": next_ordinal,
+                "llm_provider": provider,
+                "llm_model": model,
             },
         )
         if agent_result.status != "success":
@@ -445,6 +467,20 @@ async def submit_answer(
     answer: str,
     seconds_taken: float | None = None,
 ) -> dict[str, Any]:
+    return await submit_answer_impl(ctx, session_id, ordinal, answer, seconds_taken)
+
+
+async def submit_answer_impl(
+    ctx: Context,
+    session_id: str,
+    ordinal: int,
+    answer: str,
+    seconds_taken: float | None = None,
+    *,
+    llm_provider_override: Any = None,
+    llm_model_override: str | None = None,
+) -> dict[str, Any]:
+    """Shared body for judged + lab `prep.submit_answer` tools."""
     async with AsyncSessionLocal() as session:
         user = await _resolve_user(ctx, session)
         prep, project = await _load_owned_session(session, uuid.UUID(session_id), user)
@@ -464,6 +500,8 @@ async def submit_answer(
             raise ToolError("turn already answered")
 
         grounding_text = await _grounding_text(session, turn.grounding)
+        provider = llm_provider_override if llm_provider_override is not None else _judged_llm()
+        model = llm_model_override or settings.llm_model
         ev = await EvaluatorAgent().execute(
             AgentContext(
                 user_id=str(user.id),
@@ -479,6 +517,9 @@ async def submit_answer(
                 "difficulty": turn.difficulty,
                 "seconds_taken": seconds_taken,
                 "mode": prep.mode,
+                "question": turn.question,
+                "llm_provider": provider,
+                "llm_model": model,
             },
         )
         if turn.competency_id is not None:
@@ -660,6 +701,19 @@ def _finish_payload(
             "coverage": snap.coverage,
         }
     return payload
+
+
+def _judged_llm():
+    """Judged MCP server's provider — always from settings. Returns None when
+    the mock provider is active, so neither Examiner nor Evaluator wastes a
+    call."""
+    try:
+        provider = get_llm_provider()
+    except Exception:
+        return None
+    if getattr(provider, "name", "mock") == "mock":
+        return None
+    return provider
 
 
 def build_mcp_asgi_app():

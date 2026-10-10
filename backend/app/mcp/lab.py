@@ -18,7 +18,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from app.db import AsyncSessionLocal
 from app.mcp import server as judged
-from app.providers.router import resolve_providers
+from app.providers.router import build_llm_provider, resolve_providers
 
 
 lab_server = MCPServer(
@@ -84,19 +84,47 @@ async def start_session(
     return await judged.start_session(ctx, project_id, mode, difficulty)
 
 
+async def _resolved_llm_for_lab(ctx: Context):
+    """Resolve the per-request LLM provider for lab calls. Returns a (provider,
+    model) tuple where provider is None if the resolver picks `mock` (so the
+    agent short-circuits the LLM path)."""
+    async with AsyncSessionLocal() as session:
+        resolved = await resolve_providers(ctx, session, scope="lab")
+    if resolved.llm_name == "mock":
+        return None, resolved.llm_model
+    try:
+        return build_llm_provider(resolved.llm_name), resolved.llm_model
+    except Exception:
+        return None, resolved.llm_model
+
+
 @lab_server.tool(
     name="prep.next_question",
     title="Ask the examiner for the next question",
-    description="Generate the next grounded question for the session (idempotent within a turn).",
+    description=(
+        "Generate the next grounded question for the session. Uses the lab's "
+        "per-request LLM provider (X-LLM-Provider header, or admin-configured "
+        "default). Idempotent within a turn."
+    ),
 )
 async def next_question(ctx: Context, session_id: str) -> dict[str, Any]:
-    return await judged.next_question(ctx, session_id)
+    provider, model = await _resolved_llm_for_lab(ctx)
+    return await judged.next_question_impl(
+        ctx,
+        session_id,
+        llm_provider_override=provider,
+        llm_model_override=model,
+    )
 
 
 @lab_server.tool(
     name="prep.submit_answer",
     title="Submit an answer for evaluation",
-    description="Evaluate the user's answer to the current turn and return next-step guidance.",
+    description=(
+        "Evaluate the user's answer to the current turn and return next-step "
+        "guidance. Uses the lab's per-request LLM provider for the coaching "
+        "rationale."
+    ),
 )
 async def submit_answer(
     ctx: Context,
@@ -105,7 +133,16 @@ async def submit_answer(
     answer: str,
     seconds_taken: float | None = None,
 ) -> dict[str, Any]:
-    return await judged.submit_answer(ctx, session_id, ordinal, answer, seconds_taken)
+    provider, model = await _resolved_llm_for_lab(ctx)
+    return await judged.submit_answer_impl(
+        ctx,
+        session_id,
+        ordinal,
+        answer,
+        seconds_taken,
+        llm_provider_override=provider,
+        llm_model_override=model,
+    )
 
 
 @lab_server.tool(

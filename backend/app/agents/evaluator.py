@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from app.agents.base import Agent, AgentContext, AgentResult
+from app.providers.base import GenerationRequest, LLMProvider
+
+logger = logging.getLogger(__name__)
 
 
 # §26 default rubric weights.
@@ -201,14 +205,92 @@ class EvaluatorAgent(Agent):
             "communication","response_time","consistency","clarity","business_impact",
         )}
 
+        # Optional LLM-written coach rationale on top of the deterministic
+        # scores. Scores remain the source of truth; rationale is additive.
+        rationale: str | None = None
+        rationale_source = "none"
+        llm_provider: LLMProvider | None = tools.get("llm_provider")
+        llm_model: str = tools.get("llm_model") or ""
+        question: str = tools.get("question") or ""
+        if llm_provider is not None and getattr(llm_provider, "name", "mock") != "mock":
+            rationale = await _llm_rationale(
+                llm_provider,
+                llm_model,
+                question=question,
+                answer=answer,
+                topic=topic,
+                grounding_text=grounding_text,
+                persisted=persisted,
+                overall=round(overall, 4),
+            )
+            if rationale:
+                rationale_source = llm_provider.name
+
+        result: dict[str, Any] = {
+            "overall": round(overall, 4),
+            "dimensions": persisted,
+            "weights": weights,
+            "mode": mode,
+            "rationale_source": rationale_source,
+        }
+        if rationale:
+            result["rationale"] = rationale
         return AgentResult(
             agent=self.name,
             status="success",
             confidence=round(overall, 4),
-            result={
-                "overall": round(overall, 4),
-                "dimensions": persisted,
-                "weights": weights,
-                "mode": mode,
-            },
+            result=result,
         )
+
+
+_SYSTEM_COACH = (
+    "You are a professional interview coach. In 1-2 short sentences, give the "
+    "candidate honest, specific feedback — one thing they did well and one "
+    "concrete thing to tighten. Do not restate the scores. Do not restate the "
+    "question. No preamble. Under 60 words."
+)
+
+
+async def _llm_rationale(
+    provider: LLMProvider,
+    model: str,
+    *,
+    question: str,
+    answer: str,
+    topic: str,
+    grounding_text: str,
+    persisted: dict[str, float],
+    overall: float,
+) -> str | None:
+    scores_summary = ", ".join(
+        f"{k}={v:.2f}"
+        for k, v in persisted.items()
+        if k in ("accuracy", "completeness", "evidence", "conciseness", "communication")
+    )
+    prompt = (
+        f"Topic: {topic}\n"
+        f'Interviewer asked: "{question}"\n'
+        f'Candidate answered: "{answer[:1200]}"\n'
+        + (
+            f"Source material the candidate wrote about this topic:\n{grounding_text[:600]}\n"
+            if grounding_text
+            else ""
+        )
+        + f"\nRubric scores (0-1): {scores_summary}. Overall: {overall:.2f}.\n\n"
+        "Give the candidate 1-2 sentences of coaching."
+    )
+    try:
+        resp = await provider.generate(
+            GenerationRequest(
+                model=model or "gpt-4o-mini",
+                prompt=prompt,
+                system=_SYSTEM_COACH,
+                max_tokens=140,
+                temperature=0.4,
+            )
+        )
+    except Exception as exc:
+        logger.warning("Evaluator LLM rationale failed: %s", exc)
+        return None
+    text = (resp.text or "").strip()
+    return text or None
