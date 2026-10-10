@@ -28,39 +28,40 @@
 
 **Nice-to-haves that would strengthen the submission:**
 
-- [ ] Flip `LLM_PROVIDER=openai` and wire the Examiner to rewrite questions through the LLM — so judges hear more natural phrasing
+- [ ] Set `OPENAI_API_KEY` (or Bedrock creds) on the VPS `.env` if we want our hosted instance to serve LLM-rephrased questions. Opt-in enhancement; the submission does not require it.
 - [ ] Enable `ALEXA_VERIFY_SIGNATURE=true` once Amazon's cert chain is reachable
 - [ ] Record a second take with a real Echo device if we obtain Alexa+ preview access
 
 ---
 
-## 2. LLM: live or still mock after MCP is linked?
+## 2. How the LLM fits in (and who's calling what)
 
-**Still mock — provider setting is wired but no tool calls out yet.**
+Per the Alexa+ track rules and the Devpost FAQ, **the judge is the MCP client** — they connect to our MCP server via Claude Desktop, a bespoke MCP page, or `git clone` + their own key. The *judge-side* LLM (Claude, a simulator, Alexa+ itself if they have access) decides when to call which tool. Our server returns structured tool results. That is the Alexa+ integration.
 
-**Why:** The 7 `prep.*` tools do their work with deterministic Python — heuristic question templates (Examiner), lexical-overlap scoring (Evaluator), running EMA (Weakness Agent), rule-based planner (Adaptive). None of them call `provider.generate()`. The provider abstraction is in place and *ready* — flipping `LLM_PROVIDER=openai` loads the OpenAI client correctly, but the tool code path never asks it to generate anything.
+**Our server-side LLM is an *enhancement*, not the integration.** When our server is configured with an `OPENAI_API_KEY` (or Bedrock creds) and `LLM_PROVIDER` set to that provider:
 
-**Proof visible to a judge:** on the lab server, call the diagnostic:
+- **Examiner** (`prep.next_question`) still picks the competency + difficulty deterministically, then asks the LLM to rewrite the templated question in natural interviewer prose. Response carries `question_source = template | openai | bedrock`.
+- **Evaluator** (`prep.submit_answer`) still scores all seven rubric dimensions deterministically (so scores stay comparable across answers and tests stay stable), then attaches a 1–2 sentence `rationale` field written by the LLM. Response carries `rationale_source = none | openai | bedrock`.
+
+Everything else — adaptive planner, weakness map, readiness recompute, grounding — stays deterministic.
+
+**Fail-silent.** If the LLM errors (quota, network, auth), the tool quietly falls back: `question_source` becomes `template`, `rationale` is omitted. The judge's MCP call never fails.
+
+**Default stance.** `LLM_PROVIDER=mock` is the default so judges who `git clone` + `docker compose up` get a working MCP exchange without any API key. Setting the key later is additive — the deterministic scores don't change, only the human-readable text wrapping them.
+
+**On the lab server** judges can override per request:
 
 ```bash
 curl -X POST https://eprep.enthernetservice.com/api/v1/mcp-lab/ \
   -H "Authorization: Bearer $TOKEN" \
   -H 'X-LLM-Provider: openai' \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
-       "params":{"name":"prep.debug.resolve_provider","arguments":{}}}'
+       "params":{"name":"prep.next_question","arguments":{"session_id":"..."}}}'
 ```
 
-That tool reports the resolver chose `openai` — it just doesn't **call** OpenAI. Same deal for `bedrock`.
+If our server has an OpenAI key, that call returns an LLM-rephrased question. Without a key, it transparently falls back to the template. The MCP contract judges rely on is unchanged either way.
 
-**To make the LLM demonstrably live** (post-submission wiring, ~30 min):
-
-1. In `app/mcp/lab.py` (lab server only, judged stays untouched), wrap `prep.next_question` so that *when the resolver returns `openai` or `bedrock`* it passes the template question through `provider.generate(...)` with a short system prompt like "rewrite this interview question in a more natural voice".
-2. Add 1 unit test with a mocked SDK verifying the LLM is actually called.
-3. Deploy, record a before/after clip.
-
-**Why I haven't done it yet:** The judged submission must not change behavior under judges. The lab is where that experiment lives. Say the word and I'll ship it — but it's a *nice-to-have*, not a submission requirement.
+**Verified by 6 new tests** in `backend/tests/test_llm_wired_agents.py` covering both success paths and silent fallback with a `FakeLLM` provider (no live API cost).
 
 ---
 
