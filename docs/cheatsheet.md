@@ -1,4 +1,4 @@
-# Enthernet Prep AI — Ops Cheatsheet
+# Enthernet Prep AI: Ops Cheatsheet
 
 Live deployment lives on `root@89.47.249.196` at `/opt/eprep`. Reached from the
 world at **https://eprep.enthernetservice.com**. Isolated from the other four
@@ -158,10 +158,10 @@ projects and unaffected.
 
 ## What NOT to touch
 
-- `enthernet-services-web-1` (port 8000) — powers `enthernetservice.com`.
-- `enthernet-admin-*` (port 5000) — powers `admin.enthernetservice.com`.
-- `serene-*` — powers `api.sereneparagon.com`.
-- `profile-enthernet` (port 8003) — powers `profile.enthernet.com`.
+- `enthernet-services-web-1` (port 8000). powers `enthernetservice.com`.
+- `enthernet-admin-*` (port 5000). powers `admin.enthernetservice.com`.
+- `serene-*`: powers `api.sereneparagon.com`.
+- `profile-enthernet` (port 8003). powers `profile.enthernet.com`.
 - Nginx conf files for those hostnames.
 
 Everything else in `/opt/eprep/` is fair game.

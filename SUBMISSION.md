@@ -1,4 +1,4 @@
-# Submission status — Build, Ship, Shape: Amazon Developer Hackathon
+# Submission status: Build, Ship, Shape: Amazon Developer Hackathon
 
 **Primary track:** Alexa+
 **Mini-challenges we qualify for:** AWS Builder, Open Source
@@ -9,7 +9,7 @@
 
 ## 1. Is the site complete?
 
-**Yes — for the §71 competition-critical demo path.** Technical implementation is done, deployed, and verified end-to-end.
+**Yes, for the §71 competition-critical demo path.** Technical implementation is done, deployed, and verified end-to-end.
 
 | Area | State |
 |---|---|
@@ -36,18 +36,18 @@
 
 ## 2. How the LLM fits in (and who's calling what)
 
-Per the Alexa+ track rules and the Devpost FAQ, **the judge is the MCP client** — they connect to our MCP server via Claude Desktop, a bespoke MCP page, or `git clone` + their own key. The *judge-side* LLM (Claude, a simulator, Alexa+ itself if they have access) decides when to call which tool. Our server returns structured tool results. That is the Alexa+ integration.
+Per the Alexa+ track rules and the Devpost FAQ, **the judge is the MCP client**. They connect to our MCP server via the built-in browser tester, a bespoke MCP page, or `git clone` + their own tooling. The *judge-side* client (an Alexa+ simulator, our `/mcp-tester` web page, or any Streamable HTTP MCP client) decides when to call which tool. Our server returns structured tool results. That is the Alexa+ integration.
 
 **Our server-side LLM is an *enhancement*, not the integration.** When our server is configured with an `OPENAI_API_KEY` (or Bedrock creds) and `LLM_PROVIDER` set to that provider:
 
 - **Examiner** (`prep.next_question`) still picks the competency + difficulty deterministically, then asks the LLM to rewrite the templated question in natural interviewer prose. Response carries `question_source = template | openai | bedrock`.
 - **Evaluator** (`prep.submit_answer`) still scores all seven rubric dimensions deterministically (so scores stay comparable across answers and tests stay stable), then attaches a 1–2 sentence `rationale` field written by the LLM. Response carries `rationale_source = none | openai | bedrock`.
 
-Everything else — adaptive planner, weakness map, readiness recompute, grounding — stays deterministic.
+Everything else (adaptive planner, weakness map, readiness recompute, grounding) stays deterministic.
 
-**Fail-silent.** If the LLM errors (quota, network, auth), the tool quietly falls back: `question_source` becomes `template`, `rationale` is omitted. The judge's MCP call never fails.
+**Silent-fallback.** If the LLM errors (quota, network, auth), the tool quietly falls back: `question_source` becomes `template`, `rationale` is omitted. The judge's MCP call never fails.
 
-**Default stance.** `LLM_PROVIDER=mock` is the default so judges who `git clone` + `docker compose up` get a working MCP exchange without any API key. Setting the key later is additive — the deterministic scores don't change, only the human-readable text wrapping them.
+**Default stance.** `LLM_PROVIDER=mock` is the default so judges who `git clone` + `docker compose up` get a working MCP exchange without any API key. Setting the key later is additive; the deterministic scores don't change, only the human-readable text wrapping them.
 
 **On the lab server** judges can override per request:
 
@@ -67,7 +67,7 @@ If our server has an OpenAI key, that call returns an LLM-rephrased question. Wi
 
 ## 3. How to link MCP
 
-**The fastest path — a browser tab, no external software:** open `http://localhost:3000/mcp-tester` (or `https://eprep.enthernetservice.com/mcp-tester` on the hosted instance). The page *is* an MCP client — it issues `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` directly from the browser to the server. Press the four numbered buttons in order; each `prep.*` tool shows up as a card with its own input form and response panel. This is the simulated-experience path called out in the Devpost Alexa+ FAQ.
+**The fastest path. A browser tab, no external software:** open `http://localhost:3000/mcp-tester` (or `https://eprep.enthernetservice.com/mcp-tester` on the hosted instance). The page *is* an MCP client. It issues `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` directly from the browser to the server. Press the four numbered buttons in order; each `prep.*` tool shows up as a card with its own input form and response panel. This is the simulated-experience path called out in the Devpost Alexa+ FAQ.
 
 Below are the equivalent paths for judges who prefer curl or an existing MCP client.
 
@@ -79,7 +79,7 @@ Both endpoints are **live, Streamable HTTP, MCP spec 2025-11-25**, requiring `Au
 | **Judged** — Alexa+ submission surface, frozen tool set | `https://eprep.enthernetservice.com/api/v1/mcp/` |
 | **Lab** — same tools + `prep.debug.resolve_provider`; honors `X-LLM-Provider` | `https://eprep.enthernetservice.com/api/v1/mcp-lab/` |
 
-### For judges — zero-friction token flow
+### For judges: demo token flow
 
 `/api/v1/demo/seed` is public and no-login-required. One curl mints a token + seeds a realistic project with 57 competencies and a baseline readiness score:
 
@@ -95,33 +95,21 @@ curl -sS -X POST https://eprep.enthernetservice.com/api/v1/mcp/ \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-### Claude Desktop config
+### Any Streamable HTTP MCP client
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows:
+Minimal config shape most MCP clients accept:
 
 ```json
 {
-  "mcpServers": {
-    "enthernet-prep-ai": {
-      "type": "streamable-http",
-      "url": "https://eprep.enthernetservice.com/api/v1/mcp/",
-      "headers": {
-        "Authorization": "Bearer <paste JWT from /demo/seed here>"
-      }
-    },
-    "enthernet-prep-ai-lab": {
-      "type": "streamable-http",
-      "url": "https://eprep.enthernetservice.com/api/v1/mcp-lab/",
-      "headers": {
-        "Authorization": "Bearer <same JWT>",
-        "X-LLM-Provider": "mock"
-      }
-    }
+  "type": "streamable-http",
+  "url": "https://eprep.enthernetservice.com/api/v1/mcp/",
+  "headers": {
+    "Authorization": "Bearer <paste JWT from /demo/seed here>"
   }
 }
 ```
 
-Restart Claude Desktop. The judged entry shows 7 `prep.*` tools; the lab entry shows 8. Ask Claude: *"List my preparation projects. Start a mock interview on the first one."*
+Judged entry exposes 7 `prep.*` tools once initialized. The lab endpoint at `/api/v1/mcp-lab/` exposes 8 (7 + `prep.debug.resolve_provider`) and additionally honours an `X-LLM-Provider: mock|openai|bedrock` header for per-call provider override.
 
 ### Tool inventory
 
@@ -162,7 +150,7 @@ Checked against the rules on the hackathon page.
 | **AWS Builder** — use AWS services with documented integration | $5K cash + $5K AWS credits | ✅ `app/providers/bedrock.py` (LLM + embeddings via Converse / invoke_model), 4 tests. Document in Devpost form's AWS feedback section. |
 | **Open Source** — ship a new OSS project with license, or a public PR, during the hackathon window | $5K cash + $5K AWS credits | 🟡 Apache-2.0 LICENSE at root; repo needs to be pushed public on GitHub inside the window to count. Include the repo URL + a short description of what you built, how it works, and why it matters, per the rules. |
 
-### Judging criteria — self-assessment
+### Judging criteria: self-assessment
 
 | Criterion | Where we land |
 |---|---|
@@ -171,7 +159,7 @@ Checked against the rules on the hackathon page.
 | **Potential Impact** — credible customer need beyond the hackathon | Strong — "readiness with proof" is a clear value prop; the engine serves interview, pitch, and exam prep off the same pipeline. |
 | **Quality of the Idea** — creative use of the required tools | Strong — MCP-first voice architecture; one engine serves web + Alexa+; agentic flow is grounded rather than hallucinated. |
 
-### Optional bonus — friction log
+### Optional bonus: friction log
 
 > Submissions with friction logs can earn up to a 10% judging bonus.
 
@@ -185,11 +173,11 @@ Paste it verbatim into the Devpost "Product feedback" section.
 
 1. **Push to GitHub.** `git push` the pending commits (lab MCP + admin + mail + reset-password + git cleanup). If no public repo exists yet, create one and `git remote add origin ...`. Required for both the primary track's "GitHub code repository" rule and the Open Source mini-challenge.
 2. **Register the admin account.** Open https://eprep.enthernetservice.com/register with `renuelroberts01@gmail.com`. Nav will then show an **Admin** link.
-3. **Fill SMTP** (optional but recommended — needed for the password-reset flow to actually send email during judging).
+3. **Fill SMTP** (optional but recommended. needed for the password-reset flow to actually send email during judging).
 4. **Record the demo video.** The 2:30 script in prior conversation turns targets the current UI (background-png hero → mic answer → MCP terminal split → final boss). Upload to YouTube public, grab the URL.
 5. **Fill the Devpost form.** Project description, GitHub URL, demo video URL, track selections (Alexa+ + AWS Builder + Open Source), friction log, feature requests (optional).
 
-If you want help with any of these — say which one.
+If you want help with any of these. Say which one.
 
 ---
 

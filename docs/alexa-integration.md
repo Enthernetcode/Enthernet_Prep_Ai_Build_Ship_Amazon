@@ -12,7 +12,7 @@ Alexa+ event  ──▶  Amazon integration adapter  ──▶  /api/v1/sessions
 
 ## Wired endpoint
 
-`POST /api/v1/alexa` — accepts the standard Alexa request envelope. Reuses `Examiner → Evaluator → Weakness → Adaptive → Readiness` (see `app/api/v1/sessions.py`) so voice and web share one loop.
+`POST /api/v1/alexa`. Accepts the standard Alexa request envelope. Reuses `Examiner → Evaluator → Weakness → Adaptive → Readiness` (see `app/api/v1/sessions.py`) so voice and web share one loop.
 
 ### Intent → behaviour
 
@@ -28,7 +28,7 @@ Alexa+ event  ──▶  Amazon integration adapter  ──▶  /api/v1/sessions
 
 ### Account linking (§32)
 
-Alexa passes the linked user's OAuth access token in `session.user.accessToken`. The Amazon-side skill configuration must forward it as `Authorization: Bearer <token>` to this endpoint. Our JWT check in `get_current_user` is reused verbatim — no spoken-name identification.
+Alexa passes the linked user's OAuth access token in `session.user.accessToken`. The Amazon-side skill configuration must forward it as `Authorization: Bearer <token>` to this endpoint. Our JWT check in `get_current_user` is reused verbatim. No spoken-name identification.
 
 For the demo we assume the same JWT the web app issues; a production wiring should issue Amazon-scoped tokens via Login-with-Amazon.
 
@@ -53,7 +53,7 @@ Covered by `backend/tests/test_alexa_signature.py` (11 tests with self-signed ce
 ## Still to land before Amazon submission
 
 1. **Skill package** (interaction model JSON + endpoint URL). Placeholder env vars: `ALEXA_SKILL_ID`, `ALEXA_CLIENT_ID`, `ALEXA_CLIENT_SECRET`.
-2. **Latency guard.** Alexa gives ~8 s per turn. Evaluator + planner are synchronous — fine with the mock provider, but the OpenAI path should be moved to a progressive-response pattern.
+2. **Latency guard.** Alexa gives ~8 s per turn. Evaluator + planner are synchronous. fine with the mock provider, but the OpenAI path should be moved to a progressive-response pattern.
 
 ## Example envelope (for `curl` smoke test)
 
